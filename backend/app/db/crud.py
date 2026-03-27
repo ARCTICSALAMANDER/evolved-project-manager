@@ -10,7 +10,6 @@ def create_user(session: Session, username: str) -> bool:
 
         return True
     except Exception as e:
-        print('error occured:', e)
         session.rollback()
         return False
 
@@ -52,7 +51,6 @@ def create_project(session: Session, project_name: str, user_id: int, is_public:
         user.projects.append(Project(name=project_name, is_public=is_public))
         session.commit()
     except Exception as e:
-        print("error occured:", e)
         session.rollback()
         return False
 
