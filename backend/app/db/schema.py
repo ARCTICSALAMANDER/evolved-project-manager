@@ -1,12 +1,13 @@
+from backend.app.core.config import Settings
+from flask import config
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT as ILA
-from private_consts import postgres_password
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, MetaData, String, Table
 import sqlalchemy
 
 
 def create_db():
-    conn = psycopg2.connect(user="postgres", password=postgres_password)
+    conn = psycopg2.connect(user="postgres", password=Settings.DB_PASSWORD)
     conn.set_isolation_level(ILA)
 
     cursor = conn.cursor()
@@ -14,7 +15,7 @@ def create_db():
 
 
 DATABASE_URL = sqlalchemy.create_engine(
-    f"postgresql+psycopg2://postgres:{postgres_password}@localhost/project_manager")
+    f"postgresql+psycopg2://postgres:{Settings.DB_PASSWORD}@{Settings.HOST}/project_manager")
 
 metadata = MetaData()
 
