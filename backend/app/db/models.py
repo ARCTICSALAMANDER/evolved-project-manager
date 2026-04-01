@@ -1,5 +1,5 @@
 from sqlalchemy.orm import registry, relationship
-from schema import metadata, users_table, projects_table
+from .schema import metadata, users_table, projects_table
 
 
 class User:

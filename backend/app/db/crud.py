@@ -1,29 +1,29 @@
-from sqlalchemy.orm import Session
-from schema import DATABASE_URL as engine
-from models import User, Project
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import insert
+from .schema import DATABASE_URL as engine, users_table
+from .models import User, Project
 
 
-def create_user(session: Session, username: str) -> bool:
-    try:
-        session.add(User(username=username))
-        session.commit()
+async def create_user(session: AsyncSession, username: str):
+    # try:
+    #     session.add(User(username=username))
+    #     session.commit()
 
-        return True
-    except Exception as e:
-        session.rollback()
-        return False
+    #     return True
+    # except Exception as e:
+    #     session.rollback()
+    #     return False
+    stmt = insert(users_table).values(username=username)
+    await session.execute(stmt)
+    await session.commit()
 
 
-def create_users(session: Session, usernames: list) -> bool:
+async def create_users(session: AsyncSession, usernames: list):
     for username in usernames:
-        res = create_user(session, username)
-        if not res:
-            return False
-        
-    return True
+        await create_user(session, username)
 
 
-def delete_user(session: Session, user_id: int) -> bool:
+def delete_user(session: AsyncSession, user_id: int) -> bool:
     user = session.get(User, user_id)
     if not user:
         return False
@@ -33,7 +33,7 @@ def delete_user(session: Session, user_id: int) -> bool:
     return True
 
 
-def delete_users(session: Session, users_ids: list) -> bool:
+def delete_users(session: AsyncSession, users_ids: list) -> bool:
     for user_id in users_ids:
         res = delete_user(session, user_id)
         if not res:
@@ -42,31 +42,25 @@ def delete_users(session: Session, users_ids: list) -> bool:
     return True
 
 
-def create_project(session: Session, project_name: str, user_id: int, is_public: bool) -> bool:
-    user = session.get(User, user_id)
+async def create_project(session: AsyncSession, project_name: str, user_id: int, is_public: bool): # TODO: перевести на async
+    user = await session.get(User, user_id)
     if not user:
-        return False
+        yield
 
     try:
         user.projects.append(Project(name=project_name, is_public=is_public))
-        session.commit()
+        await session.commit()
     except Exception as e:
-        session.rollback()
-        return False
-
-    return True
+        print(e)
+        await session.rollback()
 
 
-def create_projects(session: Session, projects: list) -> bool:
+async def create_projects(session: AsyncSession, projects: list):
     for project in projects:
         res = create_project(session, project[0], project[1], project[2])
-        if not res:
-            return False
-        
-    return True
 
 
-def delete_project(session: Session, project_id: int) -> bool:
+def delete_project(session: AsyncSession, project_id: int) -> bool:
     project = session.get(Project, project_id)
     if not project:
         return False
@@ -77,7 +71,7 @@ def delete_project(session: Session, project_id: int) -> bool:
     return True
 
 
-def delete_projects(session: Session, projects_ids: list) -> bool:
+def delete_projects(session: AsyncSession, projects_ids: list) -> bool:
     for project_id in projects_ids:
         res = delete_project(session, project_id)
         if not res:
@@ -86,7 +80,7 @@ def delete_projects(session: Session, projects_ids: list) -> bool:
     return True
 
 
-def toggle_projects_is_public(session: Session, project_ids: list) -> bool:
+def toggle_projects_is_public(session: AsyncSession, project_ids: list) -> bool:
     for i in range(len(project_ids)):
         project_id = project_ids[i]
         project = session.get(Project, project_id)

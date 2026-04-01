@@ -1,4 +1,4 @@
-from backend.app.core.config import Settings
+from app.core.config import Settings
 from flask import config
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT as ILA
@@ -6,16 +6,25 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, MetaData, String, T
 import sqlalchemy
 
 
+settings = Settings()
+
+
 def create_db():
-    conn = psycopg2.connect(user="postgres", password=Settings.DB_PASSWORD)
+    conn = psycopg2.connect(user=settings.DB_USER, password=settings.DB_PASSWORD, host=settings.HOST)
     conn.set_isolation_level(ILA)
 
     cursor = conn.cursor()
-    cursor.execute('create database if not exists project_manager')
+    try:
+        cursor.execute('CREATE DATABASE project_manager')
+    except psycopg2.errors.DuplicateDatabase:
+        pass
 
+    cursor.close()
+    conn.close()
+    
 
 DATABASE_URL = sqlalchemy.create_engine(
-    f"postgresql+psycopg2://postgres:{Settings.DB_PASSWORD}@{Settings.HOST}/project_manager")
+    f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.HOST}/project_manager")
 
 metadata = MetaData()
 
