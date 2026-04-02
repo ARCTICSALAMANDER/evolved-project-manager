@@ -1,7 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import insert, select
-from .schema import DATABASE_URL as engine, users_table, projects_table
-from .models import User, Project
+from sqlalchemy import delete, insert, select, update
+from .schema import users_table, projects_table
 
 
 async def create_user(session: AsyncSession, username: str):
@@ -11,6 +10,7 @@ async def create_user(session: AsyncSession, username: str):
 
 
 async def create_users(session: AsyncSession, usernames: list):
+    usernames = list(set(usernames))
     for username in usernames:
         await create_user(session, username)
 
@@ -22,46 +22,59 @@ async def create_project(session: AsyncSession, project_name: str, user_id: int,
     if user is None:
         return False
 
-    stmt = insert(projects_table).values(name=project_name, user_id=user_id, is_public=is_public)
+    stmt = insert(projects_table).values(
+        name=project_name, user_id=user_id, is_public=is_public)
     await session.execute(stmt)
     await session.commit()
     return True
 
 
-async def create_projects(session: AsyncSession, projects_data: list):
+async def create_projects(session: AsyncSession, projects_data: list) -> list:
+    failed = []
     for name, user_id, is_public in projects_data:
-        await create_project(session, name, user_id, is_public)
+        success = await create_project(session, name, user_id, is_public)
+        if not success:
+            failed.append((name, user_id, is_public))
+    return failed
 
 
-def delete_project(session: AsyncSession, project_id: int) -> bool:
-    project = session.get(Project, project_id)
-    if not project:
+async def delete_project(session: AsyncSession, project_id: int) -> bool:
+    stmt = select(projects_table).where(
+        projects_table.c.project_id == project_id)
+    result = await session.execute(stmt)
+    if result.first() is None:
         return False
 
-    session.delete(project)
-    session.commit()
-
+    stmt = delete(projects_table).where(
+        projects_table.c.project_id == project_id)
+    await session.execute(stmt)
+    await session.commit()
     return True
 
 
-def delete_projects(session: AsyncSession, projects_ids: list) -> bool:
+async def delete_projects(session: AsyncSession, projects_ids: list) -> list:
+    projects_ids = list(set(projects_ids))
+    failed = []
     for project_id in projects_ids:
-        res = delete_project(session, project_id)
-        if not res:
-            return False
+        status = await delete_project(session, project_id)
+        if not status:
+            failed.append(project_id)
 
-    return True
+    return failed
+    
+    
+async def toggle_project_is_public(session: AsyncSession, project_id: int) -> bool:
+    stmt = select(projects_table.c.is_public).where(
+        projects_table.c.project_id == project_id)
+    result = await session.execute(stmt)
+    row = result.first()
+    if row is None:
+        return False
+    curr_is_public = row[0]
 
-
-def toggle_projects_is_public(session: AsyncSession, project_ids: list) -> bool:
-    for i in range(len(project_ids)):
-        project_id = project_ids[i]
-        project = session.get(Project, project_id)
-
-        if project:
-            project.is_public = not project.is_public
-            session.commit()
-        else:
-            return False
+    stmt = update(projects_table).where(projects_table.c.project_id ==
+                                        project_id).values(is_public=not curr_is_public)
+    await session.execute(stmt)
+    await session.commit()
 
     return True
