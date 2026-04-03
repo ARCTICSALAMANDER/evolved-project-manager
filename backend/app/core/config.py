@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DB_USER: str
     HOST: str
     DB_PORT: int
+    DATABASE_URL: str
     JWT_KEY: str
     JWT_ALGORITHM: str
 
@@ -14,3 +15,6 @@ class Settings(BaseSettings):
         env_file=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")),
         env_file_encoding="utf-8"
     )
+
+
+settings = Settings()
