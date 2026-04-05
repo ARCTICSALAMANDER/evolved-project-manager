@@ -2,8 +2,9 @@ from app.core.config import Settings
 from flask import config
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT as ILA
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, MetaData, String, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table
 import sqlalchemy
+from datetime import datetime
 
 
 settings = Settings()
@@ -38,7 +39,9 @@ projects_table = Table('projects', metadata,
                               primary_key=True, nullable=False),
                        Column('user_id', ForeignKey("users.id")),
                        Column('name', String(), nullable=False, unique=True),
-                       Column('is_public', Boolean(), default=False)
+                       Column('description', String(), nullable=True),
+                       Column('is_public', Boolean(), default=False),
+                       Column('created_at', DateTime(), default=datetime.now())
                        )
 
 

@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, insert, select, update
 from .schema import users_table, projects_table
+from datetime import datetime
 
 
 async def create_user(session: AsyncSession, username: str):
@@ -15,26 +16,30 @@ async def create_users(session: AsyncSession, usernames: list):
         await create_user(session, username)
 
 
-async def create_project(session: AsyncSession, project_name: str, user_id: int, is_public: bool) -> bool:
+async def create_project(session: AsyncSession, project_name: str, user_id: int, description: str | None, is_public: bool, created_at: datetime | None = None) -> tuple:
+    if created_at is None:
+        created_at = datetime.now()
+    
     stmt = select(users_table).where(users_table.c.id == user_id)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
     if user is None:
-        return False
+        return False, None
 
     stmt = insert(projects_table).values(
-        name=project_name, user_id=user_id, is_public=is_public)
-    await session.execute(stmt)
+        name=project_name, user_id=user_id, is_public=is_public, description=description, created_at=created_at).returning(projects_table)
+    res = await session.execute(stmt)
     await session.commit()
-    return True
+    return True, res.mappings().first()
 
 
 async def create_projects(session: AsyncSession, projects_data: list) -> list:
     failed = []
-    for name, user_id, is_public in projects_data:
-        success = await create_project(session, name, user_id, is_public)
-        if not success:
-            failed.append((name, user_id, is_public))
+    for name, user_id, description, is_public, created_at in projects_data:
+        success = await create_project(session, name, user_id, description, is_public, created_at)
+        if not success[0]:
+            failed.append((name, user_id, description, is_public, created_at))    
+    
     return failed
 
 
