@@ -13,3 +13,4 @@ class ProjectOut(BaseModel):
     name: str
     description: str | None = None 
     created_at: datetime
+    is_public: bool

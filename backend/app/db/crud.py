@@ -19,7 +19,7 @@ async def create_users(session: AsyncSession, usernames: list):
 async def create_project(session: AsyncSession, project_name: str, user_id: int, description: str | None, is_public: bool, created_at: datetime | None = None) -> tuple:
     if created_at is None:
         created_at = datetime.now()
-    
+
     stmt = select(users_table).where(users_table.c.id == user_id)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
@@ -27,7 +27,13 @@ async def create_project(session: AsyncSession, project_name: str, user_id: int,
         return False, None
 
     stmt = insert(projects_table).values(
-        name=project_name, user_id=user_id, is_public=is_public, description=description, created_at=created_at).returning(projects_table)
+        name=project_name,
+        user_id=user_id,
+        is_public=is_public,
+        description=description,
+        created_at=created_at
+    ).returning(projects_table)
+
     res = await session.execute(stmt)
     await session.commit()
     return True, res.mappings().first()
@@ -38,9 +44,21 @@ async def create_projects(session: AsyncSession, projects_data: list) -> list:
     for name, user_id, description, is_public, created_at in projects_data:
         success = await create_project(session, name, user_id, description, is_public, created_at)
         if not success[0]:
-            failed.append((name, user_id, description, is_public, created_at))    
-    
+            failed.append((name, user_id, description, is_public, created_at))
+
     return failed
+
+
+async def get_project(session: AsyncSession, project_name: str, user_id: int):
+    stmt = select(projects_table.c.name, projects_table.c.description, projects_table.c.created_at, projects_table.c.is_public).where(
+        (projects_table.c.name == project_name) & (projects_table.c.user_id == user_id))    
+    res = await session.execute(stmt)
+    if res is None:
+        return {}
+
+    res = res.first()
+
+    return {"name": res[0], "description": res[1], "created_at": res[2], "is_public": res[3]}
 
 
 async def delete_project(session: AsyncSession, project_id: int) -> bool:
@@ -66,8 +84,8 @@ async def delete_projects(session: AsyncSession, projects_ids: list) -> list:
             failed.append(project_id)
 
     return failed
-    
-    
+
+
 async def toggle_project_is_public(session: AsyncSession, project_id: int) -> bool:
     stmt = select(projects_table.c.is_public).where(
         projects_table.c.project_id == project_id)

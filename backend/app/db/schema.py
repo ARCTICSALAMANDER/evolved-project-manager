@@ -1,5 +1,4 @@
 from app.core.config import Settings
-from flask import config
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT as ILA
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table
@@ -11,7 +10,8 @@ settings = Settings()
 
 
 def create_db():
-    conn = psycopg2.connect(user=settings.DB_USER, password=settings.DB_PASSWORD, host=settings.HOST)
+    conn = psycopg2.connect(user=settings.DB_USER,
+                            password=settings.DB_PASSWORD, host=settings.HOST)
     conn.set_isolation_level(ILA)
 
     cursor = conn.cursor()
@@ -22,7 +22,7 @@ def create_db():
 
     cursor.close()
     conn.close()
-    
+
 
 DATABASE_URL = sqlalchemy.create_engine(
     f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.HOST}/project_manager")
@@ -37,12 +37,23 @@ users_table = Table('users', metadata,
 projects_table = Table('projects', metadata,
                        Column('project_id', Integer(),
                               primary_key=True, nullable=False),
-                       Column('user_id', ForeignKey("users.id")),
+                       Column('user_id', ForeignKey(
+                           "users.id"), nullable=False),
                        Column('name', String(), nullable=False, unique=True),
                        Column('description', String(), nullable=True),
                        Column('is_public', Boolean(), default=False),
-                       Column('created_at', DateTime(), default=datetime.now())
+                       Column('created_at', DateTime(), default=datetime.now)
                        )
+
+tasks_table = Table('tasks', metadata,
+                    Column('task_id', Integer(), primary_key=True),
+                    Column('task_name', String(), nullable=False),
+                    Column('task_executor', ForeignKey(
+                        users_table.c.id), nullable=True),
+                    Column('deadline', DateTime(), nullable=True),
+                    Column('project_id', ForeignKey(
+                        projects_table.c.project_id), nullable=False)
+                    )
 
 
 def init_db():
