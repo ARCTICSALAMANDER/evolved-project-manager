@@ -1,3 +1,4 @@
+from app.schemas.project import ProjectUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, insert, select, update
 from .schema import users_table, projects_table
@@ -32,7 +33,7 @@ async def create_project(session: AsyncSession, project_name: str, user_id: int,
         is_public=is_public,
         description=description,
         created_at=created_at
-    ).returning(projects_table)
+    ).returning(projects_table.c.project_id)
 
     res = await session.execute(stmt)
     await session.commit()
@@ -49,16 +50,17 @@ async def create_projects(session: AsyncSession, projects_data: list) -> list:
     return failed
 
 
-async def get_project(session: AsyncSession, project_name: str, user_id: int):
-    stmt = select(projects_table.c.name, projects_table.c.description, projects_table.c.created_at, projects_table.c.is_public).where(
-        (projects_table.c.name == project_name) & (projects_table.c.user_id == user_id))    
+async def get_project(session: AsyncSession, project_id: int) -> dict:
+    stmt = select(projects_table.c.name,
+                  projects_table.c.description,
+                  projects_table.c.is_public,
+                  projects_table.c.created_at).where(projects_table.c.project_id == project_id)
     res = await session.execute(stmt)
+    res = res.first()
     if res is None:
         return {}
 
-    res = res.first()
-
-    return {"name": res[0], "description": res[1], "created_at": res[2], "is_public": res[3]}
+    return {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3]}
 
 
 async def delete_project(session: AsyncSession, project_id: int) -> bool:
@@ -86,18 +88,36 @@ async def delete_projects(session: AsyncSession, projects_ids: list) -> list:
     return failed
 
 
-async def toggle_project_is_public(session: AsyncSession, project_id: int) -> bool:
-    stmt = select(projects_table.c.is_public).where(
+async def update_project_data(session: AsyncSession, project_update: ProjectUpdate) -> tuple[int, str]:
+    project_id = project_update.project_id
+
+    stmt = select(projects_table.c.name).where(
         projects_table.c.project_id == project_id)
-    result = await session.execute(stmt)
-    row = result.first()
-    if row is None:
-        return False
-    curr_is_public = row[0]
+    res = await session.execute(stmt)
+    if res.first() is None:
+        return (404, "Project not found")
 
-    stmt = update(projects_table).where(projects_table.c.project_id ==
-                                        project_id).values(is_public=not curr_is_public)
-    await session.execute(stmt)
+    if project_update.name is not None:
+        stmt = select(projects_table.c.name).where(
+            (projects_table.c.project_id != project_id) &
+            (projects_table.c.name == project_update.name))
+        res = await session.execute(stmt)
+        if res.first() is not None:
+            return (409, "Project name already exists")
+
+        stmt = update(projects_table).where(
+            projects_table.c.project_id == project_id).values(name=project_update.name)
+        await session.execute(stmt)
+
+    if project_update.description is not None:
+        stmt = update(projects_table).where(projects_table.c.project_id ==
+                                            project_id).values(description=project_update.description)
+        await session.execute(stmt)
+
+    if project_update.is_public is not None:
+        stmt = update(projects_table).where(projects_table.c.project_id ==
+                                            project_id).values(is_public=project_update.is_public)
+        await session.execute(stmt)
+
     await session.commit()
-
-    return True
+    return (200, "OK")
