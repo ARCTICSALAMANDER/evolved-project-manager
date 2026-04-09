@@ -6,9 +6,55 @@ from datetime import datetime
 
 
 async def create_user(session: AsyncSession, username: str):
-    stmt = insert(users_table).values(username=username)
+    stmt = select(users_table).where(users_table.c.username == username)
+    res = await session.execute(stmt)
+    if res.first() is not None:
+        return (False, 0)
+
+    stmt = insert(users_table).values(username=username).returning(users_table.c.id)
+    res = await session.execute(stmt)
+    await session.commit()
+    
+    return (True, res.mappings().first())
+
+
+async def change_username(session: AsyncSession, user_id: int, new_username: str) -> tuple[int, str]:
+    stmt = select(users_table).where(users_table.c.id == user_id)
+    res = await session.execute(stmt)
+    if res.first() is None:
+        return (404, "User not found")
+    
+    stmt = select(users_table.c.id).where(users_table.c.username == new_username)
+    res = await session.execute(stmt)
+    if res.first() is not None:
+        return (409, "Username already exists")
+
+    stmt = update(users_table).where(users_table.c.id == user_id).values(username=new_username)
     await session.execute(stmt)
     await session.commit()
+    return (200, "OK")
+
+
+async def delete_user(session: AsyncSession, user_id: int) -> bool:
+    stmt = select(users_table).where(users_table.c.id == user_id)
+    res = await session.execute(stmt)
+    if res.first() is None:
+        return False
+    
+    stmt = delete(users_table).where(users_table.c.id == user_id)
+    await session.execute(stmt)
+    await session.commit()
+    return True
+
+
+async def get_user(session: AsyncSession, user_id: int):
+    stmt = select(users_table.c.username).where(users_table.c.id == user_id)
+    res = await session.execute(stmt)
+    res = res.first()
+    if res is None:
+        return False, {}
+
+    return True, {"username": res}
 
 
 async def create_users(session: AsyncSession, usernames: list):
@@ -105,18 +151,17 @@ async def update_project_data(session: AsyncSession, project_update: ProjectUpda
         if res.first() is not None:
             return (409, "Project name already exists")
 
-        stmt = update(projects_table).where(
-            projects_table.c.project_id == project_id).values(name=project_update.name)
-        await session.execute(stmt)
-
+    values_dict = {}
+    if project_update.name is not None:
+        values_dict["name"] = project_update.name
     if project_update.description is not None:
-        stmt = update(projects_table).where(projects_table.c.project_id ==
-                                            project_id).values(description=project_update.description)
-        await session.execute(stmt)
-
+        values_dict["description"] = project_update.description
     if project_update.is_public is not None:
-        stmt = update(projects_table).where(projects_table.c.project_id ==
-                                            project_id).values(is_public=project_update.is_public)
+        values_dict["is_public"] = project_update.is_public
+
+    if values_dict:
+        stmt = update(projects_table).where(
+            projects_table.c.project_id == project_id).values(**values_dict)
         await session.execute(stmt)
 
     await session.commit()

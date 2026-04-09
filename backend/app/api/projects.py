@@ -31,7 +31,6 @@ async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
     res = await delete_proj(db, project_id)
     if not res:
         raise HTTPException(status_code=404, detail="Project not found")
-    return None
 
 
 @project_router.patch("/update", status_code=200)

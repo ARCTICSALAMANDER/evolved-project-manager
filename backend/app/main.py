@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.projects import project_router
+from app.api.users import users_router
 
 
 app = FastAPI(title="evolved project manager")
@@ -20,6 +21,7 @@ app.add_middleware(CORSMiddleware,
 
 
 app.include_router(project_router, prefix="/projects", tags=["projects"])
+app.include_router(users_router, prefix="/users", tags=["users"])
 
 
 @app.get("/healthcheck")
