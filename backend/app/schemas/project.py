@@ -5,7 +5,6 @@ from datetime import datetime
 class ProjectIn(BaseModel):
     name: str
     description: str | None = None
-    user_id: int # TODO: убрать отсюда, брать из токена
     is_public: bool
 
     model_config = ConfigDict(extra="forbid")

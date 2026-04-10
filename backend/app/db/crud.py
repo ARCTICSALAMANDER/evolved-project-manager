@@ -5,17 +5,17 @@ from .schema import users_table, projects_table
 from datetime import datetime
 
 
-async def create_user(session: AsyncSession, username: str):
+async def create_user(session: AsyncSession, username: str, hashed_password: str):
     stmt = select(users_table).where(users_table.c.username == username)
     res = await session.execute(stmt)
     if res.first() is not None:
         return (False, 0)
 
-    stmt = insert(users_table).values(username=username).returning(users_table.c.id)
-    res = await session.execute(stmt)
+    stmt = insert(users_table).values(username=username, hashed_password=hashed_password).returning(users_table.c.id)
+    res = await session.scalar(stmt)
     await session.commit()
     
-    return (True, res.mappings().first())
+    return (True, res)
 
 
 async def change_username(session: AsyncSession, user_id: int, new_username: str) -> tuple[int, str]:
@@ -57,10 +57,12 @@ async def get_user(session: AsyncSession, user_id: int):
     return True, {"username": res}
 
 
-async def create_users(session: AsyncSession, usernames: list):
-    usernames = list(set(usernames))
-    for username in usernames:
-        await create_user(session, username)
+async def check_username(session: AsyncSession, username: str) -> bool:
+    stmt = select(users_table.c.id).where(users_table.c.username == username)
+    res = await session.execute(stmt)
+    res = res.first()
+
+    return res is None
 
 
 async def create_project(session: AsyncSession, project_name: str, user_id: int, description: str | None, is_public: bool, created_at: datetime | None = None) -> tuple:
@@ -100,13 +102,14 @@ async def get_project(session: AsyncSession, project_id: int) -> dict:
     stmt = select(projects_table.c.name,
                   projects_table.c.description,
                   projects_table.c.is_public,
-                  projects_table.c.created_at).where(projects_table.c.project_id == project_id)
+                  projects_table.c.created_at,
+                  projects_table.c.user_id).where(projects_table.c.project_id == project_id)
     res = await session.execute(stmt)
     res = res.first()
     if res is None:
         return {}
 
-    return {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3]}
+    return {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3], "user_id": res[4]}
 
 
 async def delete_project(session: AsyncSession, project_id: int) -> bool:

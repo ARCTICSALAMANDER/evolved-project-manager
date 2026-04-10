@@ -31,7 +31,8 @@ metadata = MetaData()
 
 users_table = Table('users', metadata,
                     Column('id', Integer(), primary_key=True, nullable=False),
-                    Column('username', String(), nullable=False, unique=True)
+                    Column('username', String(), nullable=False, unique=True),
+                    Column('hashed_password', String(length=255), nullable=False)
                     )
 
 projects_table = Table('projects', metadata,
