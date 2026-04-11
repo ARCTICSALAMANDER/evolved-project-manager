@@ -49,6 +49,7 @@ projects_table = Table('projects', metadata,
 tasks_table = Table('tasks', metadata,
                     Column('task_id', Integer(), primary_key=True),
                     Column('task_name', String(), nullable=False),
+                    Column('task_description', String(), nullable=True),
                     Column('task_executor', ForeignKey(
                         users_table.c.id), nullable=True),
                     Column('deadline', DateTime(), nullable=True),

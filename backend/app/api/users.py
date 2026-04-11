@@ -24,7 +24,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     if not res[0]:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return res[1]
+    return res[1]["username"]
 
 
 @users_router.patch("/update", status_code=200)
