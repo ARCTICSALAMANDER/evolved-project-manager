@@ -2,14 +2,13 @@ from app.schemas.project import ProjectUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, insert, select, update, join
 from .schema import users_table, projects_table, tasks_table
+from .tools import does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project
 from datetime import datetime
 import bcrypt
 
 
 async def create_user(session: AsyncSession, username: str, hashed_password: str):
-    stmt = select(users_table).where(users_table.c.username == username)
-    res = await session.execute(stmt)
-    if res.first() is not None:
+    if await does_username_exist(session, username):
         return (False, 0)
 
     stmt = insert(users_table).values(username=username, hashed_password=hashed_password).returning(users_table.c.id)
@@ -36,14 +35,10 @@ async def check_user_data(session: AsyncSession, username: str, password: str):
 
 
 async def change_username(session: AsyncSession, user_id: int, new_username: str) -> tuple[int, str]:
-    stmt = select(users_table).where(users_table.c.id == user_id)
-    res = await session.execute(stmt)
-    if res.first() is None:
+    if not await does_user_exist(session, user_id):
         return (404, "User not found")
     
-    stmt = select(users_table.c.id).where(users_table.c.username == new_username)
-    res = await session.execute(stmt)
-    if res.first() is not None:
+    if await does_username_exist(session, new_username):
         return (409, "Username already exists")
 
     stmt = update(users_table).where(users_table.c.id == user_id).values(username=new_username)
@@ -53,9 +48,7 @@ async def change_username(session: AsyncSession, user_id: int, new_username: str
 
 
 async def delete_user(session: AsyncSession, user_id: int) -> bool:
-    stmt = select(users_table).where(users_table.c.id == user_id)
-    res = await session.execute(stmt)
-    if res.first() is None:
+    if not await does_user_exist(session, user_id):
         return False
     
     stmt = delete(users_table).where(users_table.c.id == user_id)
@@ -86,10 +79,7 @@ async def create_project(session: AsyncSession, project_name: str, user_id: int,
     if created_at is None:
         created_at = datetime.now()
 
-    stmt = select(users_table).where(users_table.c.id == user_id)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
-    if user is None:
+    if not await does_user_exist(session, user_id):
         return False, 0
 
     stmt = insert(projects_table).values(
@@ -130,10 +120,7 @@ async def get_project(session: AsyncSession, project_id: int) -> dict:
 
 
 async def delete_project(session: AsyncSession, project_id: int) -> bool:
-    stmt = select(projects_table).where(
-        projects_table.c.project_id == project_id)
-    result = await session.execute(stmt)
-    if result.first() is None:
+    if not await does_project_exist(session, project_id):
         return False
 
     stmt = delete(projects_table).where(
@@ -157,18 +144,16 @@ async def delete_project(session: AsyncSession, project_id: int) -> bool:
 async def update_project_data(session: AsyncSession, project_update: ProjectUpdate) -> tuple[int, str]:
     project_id = project_update.project_id
 
-    stmt = select(projects_table.c.name).where(
-        projects_table.c.project_id == project_id)
-    res = await session.execute(stmt)
-    if res.first() is None:
+    if not await does_project_exist(session, project_id):
         return (404, "Project not found")
 
     if project_update.name is not None:
-        stmt = select(projects_table.c.name).where(
+        # Check if new project name already exists (for other projects)
+        stmt = select(projects_table.c.project_id).where(
             (projects_table.c.project_id != project_id) &
             (projects_table.c.name == project_update.name))
-        res = await session.execute(stmt)
-        if res.first() is not None:
+        res = await session.scalar(stmt)
+        if res is not None:
             return (409, "Project name already exists")
 
     values_dict = {}

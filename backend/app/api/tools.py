@@ -1,1 +1,0 @@
-# will move here some frequently used functions for checking that user/project/task does exist, user has access to the projects, etc
