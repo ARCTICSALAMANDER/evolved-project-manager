@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     JWT_KEY: str
     JWT_ALGORITHM: str
+    AI_URL: str
 
     model_config = SettingsConfigDict(
         env_file=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")),
