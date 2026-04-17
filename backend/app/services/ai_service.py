@@ -1,5 +1,7 @@
+from flask import json
 import httpx
 from app.core.config import settings
+from app.schemas.task import TaskCreate
 
 
 class AiClient:
@@ -33,12 +35,28 @@ class AiClient:
                             Текст для обработки:"""
         
     def extract_tasks(self, response_data: dict):
-        return response_data.get("tasks", [])
+        thinking = response_data.get("thinking", "{}")
+        if isinstance(thinking, str):
+            return json.loads(thinking)
+        
+        return thinking
     
+    def tasks_to_model(self, tasks: dict):
+        clean_tasks = list()
+
+        for task in tasks.get("tasks", []):
+            if not ("title" in task.keys() and "description" in task.keys()):
+                continue
+
+            clean_tasks.append(TaskCreate(name=task["title"], description=task["description"]))
+        
+        return clean_tasks
+
     async def generate(self, context):
         payload = self.payload.copy()
         payload["prompt"] = self.base_context + '\n' + context
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(f"{self.base_url}/api/generate", json=payload)
             response.raise_for_status()
-            return self.extract_tasks(response.json())
+            return self.tasks_to_model(self.extract_tasks(response.json()))
+        

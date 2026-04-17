@@ -54,7 +54,9 @@ tasks_table = Table('tasks', metadata,
                         users_table.c.id), nullable=True),
                     Column('deadline', DateTime(), nullable=True),
                     Column('project_id', ForeignKey(
-                        projects_table.c.project_id), nullable=False)
+                        projects_table.c.project_id), nullable=False),
+                    Column('x_coord', Integer(), nullable=False),
+                    Column('y_coord', Integer(), nullable=False)
                     )
 
 

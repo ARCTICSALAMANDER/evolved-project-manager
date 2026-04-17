@@ -197,3 +197,9 @@ async def get_task_info(session: AsyncSession, project_id: int, task_id: int) ->
     res = [task_info, user_id]
 
     return (200, res)
+
+
+async def change_task_coords(task_id: int, new_x: int, new_y: int, session: AsyncSession):
+    stmt = update(tasks_table).where(tasks_table.c.task_id == task_id).values(x_coord=new_x, y_coord=new_y)
+    await session.execute(stmt)
+    await session.commit()
