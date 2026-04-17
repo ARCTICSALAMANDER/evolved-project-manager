@@ -1,8 +1,8 @@
 from app.schemas.project import ProjectUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, insert, select, update, join
+from sqlalchemy import delete, insert, select, update
 from .schema import users_table, projects_table, tasks_table
-from .tools import does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project
+from .tools import check_user_access_to_project, does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project
 from datetime import datetime
 import bcrypt
 
@@ -47,14 +47,17 @@ async def change_username(session: AsyncSession, user_id: int, new_username: str
     return (200, "OK")
 
 
-async def delete_user(session: AsyncSession, user_id: int) -> bool:
+async def delete_user(session: AsyncSession, user_id: int, requesting_user_id: int) -> tuple[int, str]:
+    if requesting_user_id != user_id:
+        return (403, "You can only delete your own account")
+    
     if not await does_user_exist(session, user_id):
-        return False
+        return (404, "User not found")
     
     stmt = delete(users_table).where(users_table.c.id == user_id)
     await session.execute(stmt)
     await session.commit()
-    return True
+    return (200, "OK")
 
 
 async def get_user(session: AsyncSession, user_id: int):
@@ -105,7 +108,7 @@ async def create_project(session: AsyncSession, project_name: str, user_id: int,
 #     return failed
 
 
-async def get_project(session: AsyncSession, project_id: int) -> dict:
+async def get_project(session: AsyncSession, project_id: int, user_id: int | None = None) -> tuple[int, dict]:
     stmt = select(projects_table.c.name,
                   projects_table.c.description,
                   projects_table.c.is_public,
@@ -114,20 +117,30 @@ async def get_project(session: AsyncSession, project_id: int) -> dict:
     res = await session.execute(stmt)
     res = res.first()
     if res is None:
-        return {}
+        return (404, {})
+    
+    if user_id is not None:
+        has_access = await check_user_access_to_project(session, project_id, user_id)
+        if not has_access:
+            return (403, {})
 
-    return {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3], "user_id": res[4]}
+    return (200, {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3], "user_id": res[4]})
 
 
-async def delete_project(session: AsyncSession, project_id: int) -> bool:
+async def delete_project(session: AsyncSession, project_id: int, user_id: int) -> tuple[int, str]:
     if not await does_project_exist(session, project_id):
-        return False
+        return (404, "Project not found")
+    
+    stmt = select(projects_table.c.user_id).where(projects_table.c.project_id == project_id)
+    creator_id = await session.scalar(stmt)
+    if creator_id != user_id:
+        return (403, "Only the creator can delete this project")
 
     stmt = delete(projects_table).where(
         projects_table.c.project_id == project_id)
     await session.execute(stmt)
     await session.commit()
-    return True
+    return (200, "OK")
 
 
 # async def delete_projects(session: AsyncSession, projects_ids: list) -> list:
@@ -141,14 +154,18 @@ async def delete_project(session: AsyncSession, project_id: int) -> bool:
 #     return failed
 
 
-async def update_project_data(session: AsyncSession, project_update: ProjectUpdate) -> tuple[int, str]:
+async def update_project_data(session: AsyncSession, project_update: ProjectUpdate, user_id: int) -> tuple[int, str]:
     project_id = project_update.project_id
 
     if not await does_project_exist(session, project_id):
         return (404, "Project not found")
+    
+    stmt = select(projects_table.c.user_id).where(projects_table.c.project_id == project_id)
+    creator_id = await session.scalar(stmt)
+    if creator_id != user_id:
+        return (403, "Only the creator can update this project")
 
     if project_update.name is not None:
-        # Check if new project name already exists (for other projects)
         stmt = select(projects_table.c.project_id).where(
             (projects_table.c.project_id != project_id) &
             (projects_table.c.name == project_update.name))
@@ -173,17 +190,37 @@ async def update_project_data(session: AsyncSession, project_update: ProjectUpda
     return (200, "OK")
 
 
-async def create_task(session: AsyncSession, task_name: str, project_id: int):
+async def create_task(session: AsyncSession, task_name: str, project_id: int, user_id: int):
+    if not await does_project_exist(session, project_id):
+        return (404, "Project not found")
+    
+    has_access = await check_user_access_to_project(session, project_id, user_id)
+    if not has_access:
+        return (403, "You don't have access to this project")
+    
     stmt = insert(tasks_table).values(task_name=task_name, project_id=project_id).returning(tasks_table.c.task_id)
     task_id = await session.scalar(stmt)
     await session.commit()
 
-    return (True, task_id)
+    return (201, task_id)
 
 
-async def get_task_info(session: AsyncSession, project_id: int, task_id: int) -> tuple[int, list]:
+async def get_task_info(session: AsyncSession, project_id: int, task_id: int, user_id: int) -> tuple[int, list]:
+    if not await does_project_exist(session, project_id):
+        return (404, [])
+    
+    has_access = await check_user_access_to_project(session, project_id, user_id)
+    if not has_access:
+        return (403, [])
+    
+    if not await does_task_exist(session, task_id):
+        return (404, [])
+    
+    if not await is_task_in_the_project(session, task_id, project_id):
+        return (404, [])
+    
     stmt = select(projects_table.c.user_id).where(projects_table.c.project_id == project_id)
-    user_id = await session.scalar(stmt)
+    user_id_proj = await session.scalar(stmt)
     
     stmt = select(tasks_table.c.task_name, 
                   tasks_table.c.task_description, 
@@ -194,12 +231,25 @@ async def get_task_info(session: AsyncSession, project_id: int, task_id: int) ->
     if task_info is None:
         return (404, [])
 
-    res = [task_info, user_id]
+    res = [task_info, user_id_proj]
 
     return (200, res)
 
 
-async def change_task_coords(task_id: int, new_x: int, new_y: int, session: AsyncSession):
+async def change_task_coords(task_id: int, project_id: int, new_x: int, new_y: int, user_id: int, session: AsyncSession):
+    project_exists = await does_project_exist(session, project_id)
+    if not project_exists:
+        return (404, "Project not found")
+    
+    access_to_project = await check_user_access_to_project(session, project_id, user_id)
+    if not access_to_project:
+        return (403, "You don't have access to this project")
+    
+    task_exists = await does_task_exist(session, task_id)
+    if not task_exists:
+        return (404, "Task not found")
+
     stmt = update(tasks_table).where(tasks_table.c.task_id == task_id).values(x_coord=new_x, y_coord=new_y)
     await session.execute(stmt)
     await session.commit()
+    return (200, "OK")

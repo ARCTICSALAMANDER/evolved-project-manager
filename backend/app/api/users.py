@@ -38,9 +38,6 @@ async def change_username(user_update: UserUpdate, db: AsyncSession = Depends(ge
 
 @users_router.delete("/delete", status_code=204)
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), current_user_id: int = Depends(get_curr_user)):
-    if current_user_id != user_id:
-        raise HTTPException(status_code=403, detail="You can only delete your own account")
-    
-    res = await delete_usr(db, user_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="User not found")
+    status_code, detail = await delete_usr(db, user_id, current_user_id)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=detail)

@@ -5,7 +5,6 @@ from app.db.session import get_db
 from app.schemas.project import ProjectIn, ProjectUpdate
 from fastapi import HTTPException
 from app.core.security import get_curr_user
-from app.db.tools import check_user_access_to_project
 
 
 project_router = APIRouter()
@@ -22,40 +21,24 @@ async def project_creation(project_in: ProjectIn, db: AsyncSession = Depends(get
 
 @project_router.get("/get", status_code=200)
 async def get_project(project_id: int, db: AsyncSession = Depends(get_db), user_id : int = Depends(get_curr_user)):
-    res = await get_proj(db, project_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    has_access = await check_user_access_to_project(db, project_id, user_id)
-    if not has_access:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    status_code, res = await get_proj(db, project_id, user_id)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=res if isinstance(res, str) else ("Project not found" if status_code == 404 else "Forbidden"))
     
     return res
 
 
 @project_router.delete("/delete", status_code=204)
 async def delete_project(project_id: int, db: AsyncSession = Depends(get_db), user_id : int = Depends(get_curr_user)):
-    proj = await get_proj(db, project_id)
-    if not proj:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    if proj["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Only the creator of the project can delete it")
-    
-    res = await delete_proj(db, project_id)
-    if not res:
-        raise HTTPException(status_code=404, detail="Project not found")
+    status_code, detail = await delete_proj(db, project_id, user_id)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 @project_router.patch("/update", status_code=200)
 async def update_project_data(project_update: ProjectUpdate, db: AsyncSession = Depends(get_db), user_id : int = Depends(get_curr_user)):
-    proj = await get_proj(db, project_update.project_id)
-    if not proj:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if proj["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Only the creator of the project can change its info")    
-    res = await update_proj(db, project_update)
-    if res[0] != 200:
-        raise HTTPException(status_code=res[0], detail=res[1])
-    return res[1]
+    status_code, detail = await update_proj(db, project_update, user_id)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=detail)
+    
+    return detail
