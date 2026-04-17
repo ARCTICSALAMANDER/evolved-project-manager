@@ -122,7 +122,7 @@ async def get_project(session: AsyncSession, project_id: int, user_id: int | Non
     if user_id is not None:
         has_access = await check_user_access_to_project(session, project_id, user_id)
         if not has_access:
-            return (403, {})
+            return (404, {})
 
     return (200, {"name": res[0], "description": res[1], "is_public": res[2], "created_at": res[3], "user_id": res[4]})
 
@@ -243,10 +243,13 @@ async def change_task_coords(task_id: int, project_id: int, new_x: int, new_y: i
     
     access_to_project = await check_user_access_to_project(session, project_id, user_id)
     if not access_to_project:
-        return (403, "You don't have access to this project")
+        return (404, "Project not found")
     
     task_exists = await does_task_exist(session, task_id)
     if not task_exists:
+        return (404, "Task not found")
+    
+    if not await is_task_in_the_project(session, task_id, project_id):
         return (404, "Task not found")
 
     stmt = update(tasks_table).where(tasks_table.c.task_id == task_id).values(x_coord=new_x, y_coord=new_y)

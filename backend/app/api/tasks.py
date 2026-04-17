@@ -22,7 +22,7 @@ async def create_task(task_create: TaskCreate, project_id: int, db: AsyncSession
 async def get_task(project_id: int, task_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(get_curr_user)):
     status_code, result = await get_task_info(db, project_id, task_id, user_id)
     if status_code != 200:
-        raise HTTPException(status_code=status_code, detail="Project not found" if status_code == 404 else "Forbidden")
+        raise HTTPException(status_code=status_code, detail=result)    
     
     return result
 
