@@ -3,7 +3,7 @@ from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_curr_user
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.crud import create_user as create_usr, change_username as change_usrname, delete_user as delete_usr, get_user as get_usr
+from app.db.crud import create_user as create_usr, change_username as change_usrname, delete_user as delete_usr, get_user as get_usr, get_user_projects as get_user_projs
 
 
 users_router = APIRouter()
@@ -25,6 +25,15 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     return res[1]["username"]
+
+
+@users_router.get("/get_projects", status_code=200)
+async def get_user_projects(user_id: int, db: AsyncSession = Depends(get_db)):
+    res = await get_user_projs(db, user_id)
+    if res[0] != 200:
+        raise HTTPException(status_code=res[0], detail=res[1])
+    
+    return res[2]
 
 
 @users_router.patch("/update", status_code=200)

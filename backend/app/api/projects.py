@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.crud import create_project as create_proj, get_project as get_proj, delete_project as delete_proj, update_project_data as update_proj
+from app.db.crud import create_project as create_proj, get_project as get_proj, delete_project as delete_proj, update_project_data as update_proj, get_tasks_in_project as get_proj_tasks
 from app.db.session import get_db
 from app.schemas.project import ProjectIn, ProjectUpdate
 from fastapi import HTTPException
@@ -26,6 +26,15 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db), user_
         raise HTTPException(status_code=status_code, detail=res if isinstance(res, str) else ("Project not found" if status_code == 404 else "Forbidden"))
     
     return res
+
+
+@project_router.get("/get_tasks", status_code=200)
+async def get_project_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
+    res = await get_proj_tasks(db, project_id)
+    if res[0] != 200:
+        raise HTTPException(status_code=res[0], detail=res[1])
+
+    return res[2]
 
 
 @project_router.delete("/delete", status_code=204)
