@@ -59,6 +59,13 @@ tasks_table = Table('tasks', metadata,
                     Column('y_coord', Integer(), nullable=False)
                     )
 
+refresh_tokens_table = Table('refresh_tokens', metadata,
+                            Column('id', Integer(), primary_key=True, nullable=False),
+                            Column('user_id', ForeignKey(users_table.c.id), nullable=False),
+                            Column('token', String(512), nullable=False, index=True),
+                            Column('expires_at', DateTime(timezone=True), nullable=False)
+                            )
+
 
 def init_db():
     metadata.create_all(DATABASE_URL)

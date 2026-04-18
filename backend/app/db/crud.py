@@ -1,10 +1,11 @@
 from app.schemas.project import ProjectUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, insert, select, update
-from .schema import users_table, projects_table, tasks_table
+from .schema import users_table, projects_table, tasks_table, refresh_tokens_table
 from .tools import check_user_access_to_project, does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project
-from datetime import datetime
+import datetime
 import bcrypt
+import secrets
 
 
 async def create_user(session: AsyncSession, username: str, hashed_password: str):
@@ -18,7 +19,7 @@ async def create_user(session: AsyncSession, username: str, hashed_password: str
     return (True, res)
 
 
-async def check_user_data(session: AsyncSession, username: str, password: str):
+async def check_user_data(session: AsyncSession, username: str, password: str) -> tuple[bool, int]:
     stmt = select(users_table.c.id, users_table.c.hashed_password).where(users_table.c.username == username)
     res = await session.execute(stmt)
     user_data = res.first()
@@ -78,9 +79,9 @@ async def check_username(session: AsyncSession, username: str) -> bool:
     return res is None
 
 
-async def create_project(session: AsyncSession, project_name: str, user_id: int, description: str | None, is_public: bool, created_at: datetime | None = None) -> tuple:
+async def create_project(session: AsyncSession, project_name: str, user_id: int, description: str | None, is_public: bool, created_at: datetime.datetime | None = None) -> tuple:
     if created_at is None:
-        created_at = datetime.now()
+        created_at = datetime.datetime.now()
 
     if not await does_user_exist(session, user_id):
         return False, 0
@@ -256,3 +257,36 @@ async def change_task_coords(task_id: int, project_id: int, new_x: int, new_y: i
     await session.execute(stmt)
     await session.commit()
     return (200, "OK")
+
+
+async def check_refresh_token(token: str, session: AsyncSession):
+    stmt = select(refresh_tokens_table.c.user_id, refresh_tokens_table.c.expires_at).where(refresh_tokens_table.c.token == token)
+    res = await session.execute(stmt)
+    res = res.first()
+    if res is None:
+        return (403, "Unauthorized")
+
+    user_id, exp_at = res
+
+    if exp_at <= datetime.datetime.now(datetime.timezone.utc):
+        return (401, "Refresh token expired")
+    
+    return (200, user_id)
+
+
+async def create_refresh_token(session: AsyncSession, user_id: int) -> str:
+    stmt = select(refresh_tokens_table.c.id).where(refresh_tokens_table.c.user_id == user_id)
+    res = await session.scalars(stmt)
+    res = res.all()
+    if res:
+        stmt = delete(refresh_tokens_table).where(refresh_tokens_table.c.id.in_(res))
+        await session.execute(stmt)
+
+    refresh_token = secrets.token_urlsafe(64)
+    exp_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
+
+    stmt = insert(refresh_tokens_table).values(user_id=user_id, token=refresh_token, expires_at=exp_at)
+    await session.execute(stmt)
+    await session.commit()
+
+    return refresh_token
