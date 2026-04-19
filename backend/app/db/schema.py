@@ -52,11 +52,12 @@ tasks_table = Table('tasks', metadata,
                     Column('task_description', String(), nullable=True),
                     Column('task_executor', ForeignKey(
                         users_table.c.id), nullable=True),
+                    Column('status', String(), nullable=False, default="open"),
                     Column('deadline', DateTime(), nullable=True),
                     Column('project_id', ForeignKey(
                         projects_table.c.project_id), nullable=False),
-                    Column('x_coord', Integer(), nullable=False),
-                    Column('y_coord', Integer(), nullable=False)
+                    Column('x_coord', Integer(), nullable=False, default=0),
+                    Column('y_coord', Integer(), nullable=False, default=0)
                     )
 
 refresh_tokens_table = Table('refresh_tokens', metadata,
@@ -64,6 +65,12 @@ refresh_tokens_table = Table('refresh_tokens', metadata,
                             Column('user_id', ForeignKey(users_table.c.id), nullable=False),
                             Column('token', String(512), nullable=False, index=True),
                             Column('expires_at', DateTime(timezone=True), nullable=False)
+                            )
+
+project_members_table = Table('project_members', metadata,
+                            Column('id', Integer(), primary_key=True, nullable=False),
+                            Column('user_id', ForeignKey(users_table.c.id), nullable=False),
+                            Column('project_id', ForeignKey(projects_table.c.project_id), nullable=False)
                             )
 
 

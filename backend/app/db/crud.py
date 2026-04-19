@@ -1,8 +1,8 @@
 from app.schemas.project import ProjectUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, insert, select, update
-from .schema import users_table, projects_table, tasks_table, refresh_tokens_table
-from .tools import check_user_access_to_project, does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project
+from .schema import users_table, projects_table, tasks_table, refresh_tokens_table, project_members_table
+from .tools import check_user_access_to_project, does_user_exist, does_project_exist, does_username_exist, does_project_name_exist, does_task_exist, is_task_in_the_project, is_user_project_admin
 import datetime
 import bcrypt
 import secrets
@@ -207,18 +207,78 @@ async def update_project_data(session: AsyncSession, project_update: ProjectUpda
     return (200, "OK")
 
 
-async def get_tasks_in_project(session: AsyncSession, project_id: int):
+async def is_user_project_member(session: AsyncSession, project_id: int, member_id: int) -> bool:
+    stmt = select(project_members_table.c.id).where((project_members_table.c.user_id ==
+                                                     member_id) & (project_members_table.c.project_id == project_id))
+    res = await session.scalars(stmt)
+    res = res.first()
+
+    return res is not None
+
+
+async def add_member_to_project(session: AsyncSession, project_id: int, user_id: int, member_id: int) -> tuple[int, str]:
+    if not await does_project_exist(session, project_id):
+        return (404, "Project not found")
+
+    stmt = select(projects_table.c.user_id).where(
+        projects_table.c.project_id == project_id)
+    creator_id = await session.scalar(stmt)
+    if creator_id != user_id:
+        return (403, "Only the creator can add members to this project")
+
+    if not await does_user_exist(session, member_id):
+        return (404, "User not found")
+
+    stmt = select(project_members_table.c.id).where(
+        project_members_table.c.project_id == project_id, project_members_table.c.user_id == member_id)
+    res = await session.execute(stmt)
+    res = res.first()
+    if res is not None:
+        return (409, "User is already a member of this project")
+
+    stmt = insert(project_members_table).values(
+        user_id=member_id, project_id=project_id)
+    await session.execute(stmt)
+    await session.commit()
+
+    return (200, "OK")
+
+
+async def remove_project_member(session: AsyncSession, member_id: int, project_id: int, user_id: int) -> tuple[int, str]:
+    if not await does_project_exist(session, project_id):
+        return (404, "Project not found")
+
+    stmt = select(projects_table.c.user_id).where(
+        projects_table.c.project_id == project_id)
+    creator_id = await session.scalar(stmt)
+    if creator_id != user_id:
+        return (403, "Only the creator can remove members from this project")
+
+    if not await is_user_project_member(session, project_id, member_id):
+        return (400, "This user is not a member of this project")
+
+    stmt = delete(project_members_table).where((project_members_table.c.user_id == member_id) & (
+        project_members_table.c.project_id == project_id))
+    await session.execute(stmt)
+    await session.commit()
+
+    return (200, "OK")
+
+
+async def get_tasks_in_project(session: AsyncSession, project_id: int, user_id: int):
     if await does_project_exist(session, project_id):
-        stmt = select(tasks_table.c.task_id, tasks_table.c.name).where(
-            tasks_table.c.project_id == project_id)
-        res = await session.execute(stmt)
-        res = res.all()
+        if await check_user_access_to_project(session, project_id, user_id):
+            stmt = select(tasks_table.c.task_id, tasks_table.c.name).where(
+                tasks_table.c.project_id == project_id)
+            res = await session.execute(stmt)
+            res = res.all()
 
-        tasks_list = []
-        for row in res:
-            tasks_list.append({"task_id": row[0], "name": res[1]})
-
-        return (200, "OK", tasks_list)
+            tasks_list = []
+            for row in res:
+                tasks_list.append({"task_id": row[0], "name": row[1]})
+            return (200, "OK", tasks_list)
+        else:
+            return (403, "You don't have access to this project")    
     else:
         return (404, "Project not found", [])
 
@@ -260,6 +320,7 @@ async def get_task_info(session: AsyncSession, project_id: int, task_id: int, us
     stmt = select(tasks_table.c.task_name,
                   tasks_table.c.task_description,
                   tasks_table.c.task_executor,
+                  tasks_table.c.status,
                   tasks_table.c.deadline).where(tasks_table.c.task_id == task_id)
     task_info = await session.execute(stmt)
     task_info = task_info.first()
@@ -316,7 +377,9 @@ async def delete_task(task_id: int, project_id: int, user_id: int, session: Asyn
     return (200, "OK")
 
 
-async def update_task(task_id: int, project_id: int, user_id: int, session: AsyncSession, task_name: str | None = None, task_description: str | None = None, task_executor: int | None = None, deadline: str | None = None):
+async def update_task(task_id: int, project_id: int, user_id: int, session: AsyncSession, task_name: str | None = None,
+                      task_description: str | None = None, task_executor: int | None = None, deadline: str | None = None,
+                      task_status: str | None = None):
     project_exists = await does_project_exist(session, project_id)
     if not project_exists:
         return (404, "Project not found")
@@ -344,6 +407,8 @@ async def update_task(task_id: int, project_id: int, user_id: int, session: Asyn
             return (404, "Executor user not found")
     if deadline is not None:
         values_dict["deadline"] = deadline
+    if task_status is not None:
+        values_dict["status"] = task_status
 
     if values_dict:
         stmt = update(tasks_table).where(

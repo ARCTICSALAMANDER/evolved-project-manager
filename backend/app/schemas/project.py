@@ -24,3 +24,10 @@ class ProjectUpdate(BaseModel):
     is_public: bool | None
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ProjectMember(BaseModel):
+    user_id: int
+    project_id: int
+
+    model_config = ConfigDict(extra="forbid")

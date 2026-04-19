@@ -1,8 +1,9 @@
+from app.db.tools import does_project_exist, is_user_project_admin
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.crud import create_project as create_proj, get_project as get_proj, delete_project as delete_proj, update_project_data as update_proj, get_tasks_in_project as get_proj_tasks
+from app.db.crud import create_project as create_proj, get_project as get_proj, delete_project as delete_proj, update_project_data as update_proj, get_tasks_in_project as get_proj_tasks, add_member_to_project as add_member, remove_project_member
 from app.db.session import get_db
-from app.schemas.project import ProjectIn, ProjectUpdate
+from app.schemas.project import ProjectIn, ProjectUpdate, ProjectMember
 from fastapi import HTTPException
 from app.core.security import get_curr_user
 
@@ -29,8 +30,8 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db), user_
 
 
 @project_router.get("/get_tasks", status_code=200)
-async def get_project_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
-    res = await get_proj_tasks(db, project_id)
+async def get_project_tasks(project_id: int, db: AsyncSession = Depends(get_db), user_id: int = Depends(get_curr_user)):
+    res = await get_proj_tasks(db, project_id, user_id)    
     if res[0] != 200:
         raise HTTPException(status_code=res[0], detail=res[1])
 
@@ -51,3 +52,19 @@ async def update_project_data(project_update: ProjectUpdate, db: AsyncSession = 
         raise HTTPException(status_code=status_code, detail=detail)
     
     return detail
+
+
+@project_router.patch("/add_member", status_code=200)
+async def add_project_member(member: ProjectMember, user_id: int = Depends(get_curr_user), db: AsyncSession = Depends(get_db)):
+    res = await add_member(db, member.project_id, user_id, member.user_id)
+    if res[0] != 200:
+        raise HTTPException(status_code=res[0], detail=res[1])
+    
+    return res[1]
+            
+
+@project_router.delete("/delete_member", status_code=204)
+async def delete_member(member: ProjectMember, user_id: int = Depends(get_curr_user), db: AsyncSession = Depends(get_db)):
+    res = await remove_project_member(db, member.user_id, member.project_id, user_id)
+    if res[0] != 200:
+        raise HTTPException(status_code=res[0], detail=res[1])
