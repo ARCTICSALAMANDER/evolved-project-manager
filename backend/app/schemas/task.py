@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 class TaskCreate(BaseModel):
     name: str
-    description: str | None
+    description: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 

@@ -1,7 +1,11 @@
-from flask import json
+import json
 import httpx
 from app.core.config import settings
 from app.schemas.task import TaskCreate
+
+
+class AiResponseError(Exception):
+    pass
 
 
 class AiClient:
@@ -35,22 +39,49 @@ class AiClient:
                             Текст для обработки:"""
         
     def extract_tasks(self, response_data: dict):
-        thinking = response_data.get("thinking", "{}")
-        if isinstance(thinking, str):
-            return json.loads(thinking)
-        
-        return thinking
+        if not isinstance(response_data, dict):
+            raise AiResponseError("AI response must be a JSON object")
+
+        response = response_data.get("response")
+        if not isinstance(response, str) or not response.strip():
+            raise AiResponseError("AI response does not contain generated task JSON")
+
+        try:
+            tasks = json.loads(response)
+        except json.JSONDecodeError as exc:
+            raise AiResponseError("AI response contains invalid task JSON") from exc
+
+        if not isinstance(tasks, dict):
+            raise AiResponseError("AI task JSON must be an object")
+        task_items = tasks.get("tasks")
+        if not isinstance(task_items, list) or not task_items:
+            raise AiResponseError("AI task JSON must contain a non-empty tasks list")
+
+        for task in task_items:
+            if (
+                not isinstance(task, dict)
+                or not isinstance(task.get("title"), str)
+                or not task["title"].strip()
+                or not isinstance(task.get("description"), str)
+            ):
+                raise AiResponseError("AI task entries must contain a title and description")
+
+        return tasks
     
     def tasks_to_model(self, tasks: dict):
-        clean_tasks = list()
+        if not isinstance(tasks, dict):
+            raise AiResponseError("AI task data must be an object")
+        task_items = tasks.get("tasks")
+        if not isinstance(task_items, list) or not task_items:
+            raise AiResponseError("AI task data must contain a non-empty tasks list")
 
-        for task in tasks.get("tasks", []):
-            if not ("title" in task.keys() and "description" in task.keys()):
-                continue
-
-            clean_tasks.append(TaskCreate(name=task["title"], description=task["description"]))
-        
-        return clean_tasks
+        try:
+            return [
+                TaskCreate(name=task["title"], description=task["description"])
+                for task in task_items
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AiResponseError("AI task entries have an invalid structure") from exc
 
     async def generate(self, context):
         payload = self.payload.copy()
@@ -58,5 +89,9 @@ class AiClient:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(f"{self.base_url}/api/generate", json=payload)
             response.raise_for_status()
-            return self.tasks_to_model(self.extract_tasks(response.json()))
+            try:
+                response_data = response.json()
+            except (json.JSONDecodeError, ValueError) as exc:
+                raise AiResponseError("AI service returned invalid JSON") from exc
+            return self.tasks_to_model(self.extract_tasks(response_data))
         

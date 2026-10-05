@@ -268,7 +268,7 @@ async def remove_project_member(session: AsyncSession, member_id: int, project_i
 async def get_tasks_in_project(session: AsyncSession, project_id: int, user_id: int):
     if await does_project_exist(session, project_id):
         if await check_user_access_to_project(session, project_id, user_id):
-            stmt = select(tasks_table.c.task_id, tasks_table.c.name).where(
+            stmt = select(tasks_table.c.task_id, tasks_table.c.task_name).where(
                 tasks_table.c.project_id == project_id)
             res = await session.execute(stmt)
             res = res.all()
@@ -283,7 +283,8 @@ async def get_tasks_in_project(session: AsyncSession, project_id: int, user_id: 
         return (404, "Project not found", [])
 
 
-async def create_task(session: AsyncSession, task_name: str, project_id: int, user_id: int):
+async def create_task(session: AsyncSession, task_name: str, project_id: int, user_id: int,
+                      task_description: str | None = None):
     if not await does_project_exist(session, project_id):
         return (404, "Project not found")
 
@@ -292,6 +293,7 @@ async def create_task(session: AsyncSession, task_name: str, project_id: int, us
         return (403, "You don't have access to this project")
 
     stmt = insert(tasks_table).values(task_name=task_name,
+                                      task_description=task_description,
                                       project_id=project_id).returning(tasks_table.c.task_id)
     task_id = await session.scalar(stmt)
     await session.commit()

@@ -25,7 +25,7 @@ async def get_curr_user(token: str = Depends(oauth_scheme)):
     
 
 def create_token(user_id):
-    payload = { "user_id": user_id, 
-                   "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1), 
-                   "iat": datetime.datetime.now(datetime.timezone.utc) }
+    payload = { "sub": str(user_id),
+                "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1),
+                "iat": datetime.datetime.now(datetime.timezone.utc) }
     return jwt.encode(payload, key=settings.JWT_KEY, algorithm=settings.JWT_ALGORITHM)

@@ -11,7 +11,8 @@ tasks_router = APIRouter(prefix="/projects/{project_id}/tasks")
 
 @tasks_router.post("/create", status_code=201)
 async def create_task(task_create: TaskCreate, project_id: int, db: AsyncSession = Depends(get_db), user_id=Depends(get_curr_user)):
-    status_code, result = await create_tsk(db, task_create.name, project_id, user_id)
+    status_code, result = await create_tsk(
+        db, task_create.name, project_id, user_id, task_create.description)
     if status_code != 201:
         raise HTTPException(status_code=status_code, detail=result)
 
