@@ -1,7 +1,7 @@
 from app.core.config import Settings
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT as ILA
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, String, Table
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, JSON, MetaData, String, Table, UniqueConstraint, text
 import sqlalchemy
 from datetime import datetime
 
@@ -32,7 +32,11 @@ metadata = MetaData()
 users_table = Table('users', metadata,
                     Column('id', Integer(), primary_key=True, nullable=False),
                     Column('username', String(), nullable=False, unique=True),
-                    Column('hashed_password', String(length=255), nullable=False)
+                    Column('email', String(), nullable=True),
+                    Column('tech_stack', JSON(), nullable=False, default=list,
+                           server_default=text("'[]'")),
+                    Column('hashed_password', String(length=255), nullable=False),
+                    UniqueConstraint('email', name='uq_users_email')
                     )
 
 projects_table = Table('projects', metadata,
@@ -42,6 +46,7 @@ projects_table = Table('projects', metadata,
                            "users.id"), nullable=False),
                        Column('name', String(), nullable=False, unique=True),
                        Column('description', String(), nullable=True),
+                       Column('repository_url', String(), nullable=True),
                        Column('is_public', Boolean(), default=False),
                        Column('created_at', DateTime(), default=datetime.now)
                        )
@@ -52,12 +57,18 @@ tasks_table = Table('tasks', metadata,
                     Column('task_description', String(), nullable=True),
                     Column('task_executor', ForeignKey(
                         users_table.c.id), nullable=True),
-                    Column('status', String(), nullable=False, default="open"),
+                    Column('status', String(), nullable=False, default="not_started",
+                           server_default=text("'not_started'")),
+                    Column('commit_url', String(), nullable=True),
                     Column('deadline', DateTime(), nullable=True),
                     Column('project_id', ForeignKey(
                         projects_table.c.project_id), nullable=False),
                     Column('x_coord', Integer(), nullable=False, default=0),
-                    Column('y_coord', Integer(), nullable=False, default=0)
+                    Column('y_coord', Integer(), nullable=False, default=0),
+                    CheckConstraint(
+                        "status IN ('not_started', 'in_progress', 'review', 'completed')",
+                        name='ck_tasks_status'
+                    )
                     )
 
 refresh_tokens_table = Table('refresh_tokens', metadata,
@@ -70,7 +81,11 @@ refresh_tokens_table = Table('refresh_tokens', metadata,
 project_members_table = Table('project_members', metadata,
                             Column('id', Integer(), primary_key=True, nullable=False),
                             Column('user_id', ForeignKey(users_table.c.id), nullable=False),
-                            Column('project_id', ForeignKey(projects_table.c.project_id), nullable=False)
+                            Column('project_id', ForeignKey(projects_table.c.project_id), nullable=False),
+                            UniqueConstraint(
+                                'user_id', 'project_id',
+                                name='uq_project_members_user_project'
+                            )
                             )
 
 

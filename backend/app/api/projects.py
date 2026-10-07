@@ -13,7 +13,10 @@ project_router = APIRouter()
 
 @project_router.post("/create", status_code=201)
 async def project_creation(project_in: ProjectIn, db: AsyncSession = Depends(get_db), user_id : int = Depends(get_curr_user)):
-    created = await create_proj(db, project_in.name, user_id, project_in.description, project_in.is_public)
+    created = await create_proj(
+        db, project_in.name, user_id, project_in.description, project_in.is_public,
+        repository_url=project_in.repository_url
+    )
     if created[0]:
         return created[1]
     else:

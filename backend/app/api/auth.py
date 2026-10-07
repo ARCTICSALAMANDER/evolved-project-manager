@@ -14,13 +14,15 @@ auth_router = APIRouter()
 async def register(user_create: UserCreate, db: AsyncSession = Depends(get_db)):
     res = await create_user(db, 
                             user_create.username, 
-                            bcrypt.hashpw(user_create.password.get_secret_value().encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))
+                            bcrypt.hashpw(user_create.password.get_secret_value().encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
+                            user_create.email,
+                            user_create.tech_stack)
     if res[0]:
         user_id = res[1]
         refresh_token = await create_refresh_token(db, user_id)
         return {"token": create_token(user_id), "refresh_token": refresh_token}
     else:
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Username or email already exists")
     
 
 @auth_router.post("/login", status_code=200)

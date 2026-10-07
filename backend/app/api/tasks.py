@@ -12,7 +12,9 @@ tasks_router = APIRouter(prefix="/projects/{project_id}/tasks")
 @tasks_router.post("/create", status_code=201)
 async def create_task(task_create: TaskCreate, project_id: int, db: AsyncSession = Depends(get_db), user_id=Depends(get_curr_user)):
     status_code, result = await create_tsk(
-        db, task_create.name, project_id, user_id, task_create.description)
+        db, task_create.name, project_id, user_id, task_create.description,
+        task_create.status, task_create.commit_url, task_create.task_executor,
+        task_create.deadline)
     if status_code != 201:
         raise HTTPException(status_code=status_code, detail=result)
 
@@ -39,7 +41,10 @@ async def update_task_coords(task_id: int, new_x: int, new_y: int, project_id: i
 
 @tasks_router.put(path="/{task_id}", status_code=200)
 async def update_task(task_id: int, task_update: TaskUpdate, project_id: int, user_id: int = Depends(get_curr_user), db: AsyncSession = Depends(get_db)):
-    res = await update_tsk(task_id, project_id, user_id, db, task_update.name, task_update.description, task_update.task_executor, task_update.deadline)
+    res = await update_tsk(
+        task_id, project_id, user_id, db,
+        task_update.model_dump(exclude_unset=True)
+    )
     if res[0] != 200:
         raise HTTPException(status_code=res[0], detail=res[1])
 
